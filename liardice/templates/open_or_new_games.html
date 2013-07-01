@@ -1,0 +1,108 @@
+<html>
+	<head>
+        <title>Liar's Dice</title>
+        <link href="/static/css/ld.css" rel="stylesheet" type="text/css" media="screen">	
+        <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.3.2/jquery.min.js"></script> 
+        <script type="text/javascript" src="/static/js/jquery.cookie.js"></script> 
+        <script type="text/javascript">
+            var CHECK_INTERVAL = 2000;
+            var GIVE_UP_COUNT = (2 * 60 * 60) / (CHECK_INTERVAL/1000);  
+            //var maxGameID = 0;
+            var checksWithoutChange = 0;
+            function joinGame(game_id) {
+                var joinurl = "/x_join_game/" + game_id + "/";
+
+                $.ajax({
+                    type: "POST",
+                    url: joinurl, 
+                    dataType: "html",
+                    success: (function(result, st, xhr) {
+                        window.location = '/';
+                    }),
+                    error: (function(result, st, xhr) {
+                        $('#sysMessages').append('<p>' + result['response'] + '</p>');
+                    })
+                });
+            }
+
+            function getOpenGames() {
+                $.ajax({
+                    type: "GET",
+                    url: "/x_get_open_games/", 
+                    dataType: "json",
+                    success: (function(result, st, xhr) {
+                        var ogs = result['openGames'];
+                        var mgid = result['maxGameID'];
+                        /*
+                        if (mgid != maxGameID) {
+                            maxGameID = mgid;
+                            displayOpenGameList(ogs);
+                        } else {
+                            checksWithoutChange++;
+                        }
+                        */
+                        displayOpenGameList(ogs);
+                        
+                        if (checksWithoutChange < GIVE_UP_COUNT) 
+                            setTimeout(getOpenGames, CHECK_INTERVAL);
+                        else
+                            $('#sysMessages').append('<p><strong>Communication with the server was terminated due to inactivity or repeated errors.</strong></p>');
+                    }),
+                    error: (function(result, st, xhr) {
+                        $('#sysMessages').append('<strong>A retryable server error occured.</strong>');
+                        //repeated errors should *rapidly* kill polling.
+                        checksWithoutChange = checksWithoutChange + 50;
+                        if (checksWithoutChange < GIVE_UP_COUNT) 
+                            setTimeout(getOpenGames, CHECK_INTERVAL);
+                        else
+                            $('#sysMessages').append('<p><strong>Communication with the server was terminated due to inactivity or repeated errors.</strong></p>');
+                    })
+                });
+            }
+
+            function displayOpenGameList(arrOpenGames) {
+                $('#openGameListing').empty();
+
+                if (arrOpenGames.length) {
+                    for (var i in arrOpenGames) {
+                        $('#openGameListing').append('<p><input type="button" onclick="joinGame(' + arrOpenGames[i]['id'] + ');" value="Join This Game" /> ' + arrOpenGames[i]['listing_text'] + '</p>');
+                    }
+                    $('#noOpenGames').hide();
+                } else {
+                    $('#noOpenGames').show();
+                }
+            }
+
+            function initPage() {
+                $('#cnickname').html($.cookie('nickname'));
+                getOpenGames();  //run once on page load, then timer.
+                setTimeout(getOpenGames, CHECK_INTERVAL);
+            }
+
+            $(document).ready(initPage);
+        </script>
+	</head>
+	<body>
+        <div id="content">
+            <p>
+                Welcome, <span id="cnickname"></span>.
+            </p>
+            <p>Join an existing game:</p>
+            <div id="openGameListing">
+            </div>
+            <div id="noOpenGames">
+                <p><em>There are no open games at the moment, but you can start one below.</em></p>
+            </div>
+            <p>&nbsp;</p>
+            <p>or start a new game:</p>
+            <form name="frm_new_game" id="frm_new_game" action="/open_or_new_games/" method="post">
+                {% csrf_token %}
+                {{ form.as_p }}
+                <input type="submit" value="Start New Game" />
+            </form>
+            <div id="sysMessages">
+            </div>
+        </div>
+	</body>
+</html>
+

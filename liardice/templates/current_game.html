@@ -1,0 +1,295 @@
+<html>
+	<head>
+        <title>Liar's Dice</title>
+        <link href="/static/css/ld.css" rel="stylesheet" type="text/css" media="screen">
+        <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.3.2/jquery.min.js"></script> 
+        <script type="text/javascript" src="/static/js/jquery.cookie.js"></script> 
+        <script type="text/javascript">
+            var CHECK_INTERVAL = 1500;
+            var GIVE_UP_COUNT = 600 / (CHECK_INTERVAL/1000);
+            var gameRound = 0;
+            var roundStatus = 0;
+            var checksWithoutChange = 0;
+            var lastBidDice = 0;
+            var lastBidPips = 0
+            var diceImgSrcs = new Array();
+            //TODO: for now, hardcoding to d6.
+            var pipNames = ['zeroes', 'ones', 'twos', 'threes', 'fours', 'fives', 'sixes'];
+
+            function checkForUpdates() {
+                $.ajax({
+                    type: "GET",
+                    url: "/x_check_for_updates/", 
+                    dataType: "json",
+                    success: (function(result, st, xhr) {
+                        var ngr = result['gameRound'];
+                        var nrs = result['roundStatus'];
+                        if (ngr != gameRound) {
+                            updateGame();
+                            gameRound = ngr;
+                            updateRound();
+                            roundStatus = nrs;
+                            checksWithoutChange = 0;
+                        } else if (nrs != roundStatus) {
+                            updateRound(); 
+                            roundStatus = nrs;
+                            checksWithoutChange = 0;
+                        } else {
+                            checksWithoutChange++;
+                        }
+                        // if we go 10 min without any change, something went wrong, quit pounding server.
+                        if (checksWithoutChange < GIVE_UP_COUNT) 
+                            setTimeout(checkForUpdates, CHECK_INTERVAL);
+                        else
+                            $('#sysMessages').append('<p><strong>Communication with the server was terminated due to inactivity or repeated errors.</strong></p>');
+                    }),
+                    error: (function(result, st, xhr) {
+                        $('#sysMessages').append('<strong>A retryable server error occured.</strong>');
+                        //repeated errors should *rapidly* kill polling.
+                        checksWithoutChange = checksWithoutChange + 50;
+                        if (checksWithoutChange < GIVE_UP_COUNT) 
+                            setTimeout(checkForUpdates, CHECK_INTERVAL);
+                        else
+                            $('#sysMessages').append('<p><strong>Communication with the server was terminated due to inactivity or repeated errors.</strong></p>');
+                    })
+                });
+            }
+
+            function initImages() {
+                for(var i=0;i<=6;i++) {
+                    diceImgSrcs[i] = '/static/images/dice_' + i + '.png';
+                }
+            }
+
+            function initPage() {
+                $('#cnickname').html($.cookie('nickname'));
+                initImages();
+                setTimeout(checkForUpdates, CHECK_INTERVAL);
+            }
+
+            function displayGameBoard(dictOthers, arrYourDice) {
+                $('#roundMessages').empty();
+                $("#othersDieCount").empty();
+
+                for (var key in dictOthers) {
+                    $("#othersDieCount").append('<div class="withdice">' + key + ':</div>'); 
+                    for(var i=0;i<dictOthers[key];i++) {
+                        var img = new Image();
+                        img.src = diceImgSrcs[0];
+                        $("#othersDieCount").append(img); 
+                    }
+                    $("#othersDieCount").append('<div class="clearer"></div>');
+                    //$("#othersDieCount").append('<p>' + key + ' has ' + dictOthers[key] + ' dice remaining.</p>'); 
+                }
+
+                $("#yourDice").html('<div class="withdice">Your dice: </div>');
+                for (var i in arrYourDice) {
+                    var img = new Image();
+                    img.src = diceImgSrcs[arrYourDice[i]];
+                    $("#yourDice").append(img);
+                }
+                $("#yourDice").append('<div class="clearer"></div>');
+            }
+
+            function displayResultPropertiesToSysMessages(result) {
+                for (var key in result) {
+                    if (result.hasOwnProperty(key)) {
+                        $('#sysMessages').append('<div>' + key + ' -> ' + result[key] + '</div>');
+                    }
+                }
+            }
+
+            function displayRoundInfo(arrMessages, roundStatusCounter, isYourTurn, isGameActive) {
+                $('#roundMessages').empty();
+                for (var i in arrMessages) {
+                    if (arrMessages[i][0] == 'std') {
+                        $('#roundMessages').append('<p>' + arrMessages[i][1] + '</p>');
+                    } else {
+                        $('#roundMessages').append('<p>NON-STD MSG: ' + arrMessages[i][0] + ' '  + arrMessages[i][1] + '</p>');
+                    }
+                }
+                $('#roundMessages').scrollTop(99999);
+
+                //TODO: really need to turn off update polling now!
+                //after msgs, check if game is still active, if not, show lobby link and exit. 
+                if (!isGameActive) {
+                    $('#waitForYourTurn').hide();
+                    $('#playYourTurn').hide();
+                    $('#returnToLobby').show();
+                    return;
+                }
+
+                if (isYourTurn) {
+                    displayChallengeDropdowns();
+                    $('#waitForYourTurn').hide();
+                    $('#playYourTurn').show();
+                    if (roundStatusCounter == 1)
+                        $('#challenge').hide();
+                    else
+                        $('#challenge').show();
+                } else {
+                    $('#waitForYourTurn').show();
+                    $('#playYourTurn').hide();
+                } 
+            }
+
+            function displayChallengeDropdowns() {
+                minDice = (lastBidDice > 0) ? lastBidDice : 1;
+                $('#dice_count').empty();
+                //TODO: for now, hardcoding to max 30 dice, should really be all remaining dice total.
+                for (var i = minDice; i < 31; i++) {
+                    $('#dice_count').append(
+                        $('<option></option>').val(i).html(i)
+                    );
+                }
+
+                $('#pips').empty();
+                //we skip 'zeroes'.
+                for (var i = 1; i < pipNames.length; i++) {
+                    $('#pips').append(
+                        $('<option></option>').val(i).html(pipNames[i])
+                    );
+                }
+
+                //TODO: again, hardcoding to d6.
+                if (lastBidPips == 6) {
+                    $("#dice_count").val(lastBidDice + 1);
+                    //pips should default correctly in this case.
+                } else {
+                    //dice count should default correctly in this case.
+                    $('#pips').val(lastBidPips + 1);
+                }
+            }
+
+            function sendBid() {
+                var dice = $('#dice_count').val();
+                var pips = $('#pips').val();
+                var bidurl = '/x_send_bid/' + dice + '/' + pips + '/';
+
+                if ((dice < lastBidDice) || (dice == lastBidDice && pips <= lastBidPips)) {
+                    //TODO: this shouldn't be an alert, and the previous bid should be bold and prominent.
+                    alert('Your new bid must be higher than the previous bid.');
+                }
+
+                $.ajax({
+                    type: "POST",
+                    url: bidurl, 
+                    dataType: "html",
+                    success: (function(result, st, xhr) {
+                        //we don't do anything on success, just wait for update refresh.
+                    }),
+                    error: (function(result, st, xhr) {
+                        $('#sysMessages').append('<p>Bid attempt failed. Retry or reload page using Ctrl-F5.</p>');
+                        displayResultPropertiesToSysMessages(result);
+                    })
+                });
+            }
+
+            function sendChallenge() {
+                $.ajax({
+                    type: "POST",
+                    url: "/x_send_challenge/", 
+                    dataType: "html",
+                    success: (function(result, st, xhr) {
+                        //we don't do anything on success, just wait for update refresh.
+                    }),
+                    error: (function(result, st, xhr) {
+                        $('#sysMessages').append('<p>Challenge attempt failed. Retry or reload page using Ctrl-F5.</p>');
+                        displayResultPropertiesToSysMessages(result);
+                    })
+                });
+
+            }
+
+            function updateGame() {
+                //$('#sysMessages').append('Updating all<br />');
+                $.ajax({
+                    type: "GET",
+                    url: "/x_update_game/", 
+                    dataType: "json",
+                    success: (function(result, st, xhr) {
+                        displayGameBoard(result['othersDieCount'], result['yourDice']);
+                    }),
+                    error: (function(result, st, xhr) {
+                        $('#sysMessages').append('<strong>Error occured updating round info, wait ~5 seconds for autocorrect.</strong>');
+                        displayResultPropertiesToSysMessages(result);
+                    })
+                });
+            }
+
+            function updateRound() {
+                //$('#sysMessages').append('Updating round<br />');
+                $.ajax({
+                    type: "GET",
+                    url: "/x_update_round/", 
+                    dataType: "json",
+                    success: (function(result, st, xhr) {
+                        lastBidDice = result['lastBidDice'];
+                        lastBidPips = result['lastBidPips'];
+                        displayRoundInfo(result['roundMessages'], result['roundStatusCounter'], result['isYourTurn'], result['isGameActive']);
+                    }),
+                    error: (function(result, st, xhr) {
+                        $('#sysMessages').append('<strong>Error occured updating round info, wait ~5 seconds for autocorrect.</strong>');
+                        displayResultPropertiesToSysMessages(result);
+                    })
+                });
+            }
+
+            $(document).ready(initPage);
+        </script>
+	</head>
+	<body>
+        <div id="content">
+            <div id="gameBoard">
+                <p>
+                    Welcome, <span id="cnickname"></span>.
+                </p>
+                <div id="yourDice">
+                </div>
+                <div id="othersDieCount">
+                </div>
+            </div>
+            <div id="roundMessages">
+            </div>
+            <div id="playerActions">
+                <div id="returnToLobby">
+                    <p>Game is over, <a href="{% url ldsite.liardice.views.new_session %}">return to lobby.</a></p>
+                </div>
+                <div id="waitForYourTurn">
+                    <p>Waiting for your turn...</p>
+                </div>
+                <div id="playYourTurn">
+                    <p>It's your turn. Send a bid:</p>
+                    <div id="bid">
+                        <p>
+                            <span class="rpad50">
+                                Number of dice:
+                                <select id="dice_count" name="dice_count">
+                                </select>
+                            </span>
+                            <span class="rpad50">
+                                Number of pips:
+                                <select id="pips" name="pips">
+                                </select>
+                            </span>
+                            <input type="button" name="btnBid" value="Send Bid" onclick="sendBid();">
+                        </p>
+                    </div>
+                    <div id="challenge">
+                        <p>
+                            <span class="rpad25">
+                                or, challenge the previous bid:
+                            </span>
+                            <input type="button" name="btnChallenge" value="Send Challenge" onclick="sendChallenge();">
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="clearer">
+            </div>
+            <div id="sysMessages">
+            </div>
+        </div>
+	</body>
+</html>
+

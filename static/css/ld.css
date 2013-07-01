@@ -1,0 +1,110 @@
+/* universal */
+
+* {
+    margin: 0 auto;
+}
+
+body { 
+    font-family: Verdana, sans-serif;
+    font-size: 1em;
+    background-color: #B5B6AD
+}
+
+p {
+    font-size: 0.8em;
+    text-align: justify;
+    line-height: 1.4em;
+    padding: 5px;
+}
+
+p.error {
+    font-weight: bold;
+    color: red; 
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+
+p.message {
+    font-weight: bold;
+    color: blue; 
+}
+
+/* this is freaking ridiculous, just trying to get a valign=middle effect */
+div.withdice {
+    float:left;
+    display: inline-block;
+    font-size: 0.8em;
+    padding: 5px;
+    line-height: 36px; /* make slightly smaller than dice images */
+}
+
+div.clearer {
+    clear: both;
+}
+
+span.rpad50 {
+    padding-right: 50px;
+}
+
+span.rpad25 {
+    padding-right: 25px;
+}
+
+
+#content {
+    width: 960px;
+    background-color: #ffffff;
+    min-height: 1000px;
+}
+
+#gameBoard {
+    float: left;
+    margin: 0;
+    width: 345px;
+}
+
+#yourDice {
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+#playerActions {
+    margin-left: 366px;
+    margin-top: 20px;
+    padding-top: 20px;
+    padding-bottom: 20px;
+	border: thin solid black;
+}
+
+#roundMessages {
+    height: 200px;
+    width: 593px;       /* width required for Chrome, else width becomes negative (!)  if 634px, then pushed below left side content in IE!  argh! */
+    margin-left: 366px;
+    overflow-y: scroll;
+	border: thin solid black;
+}
+
+#noOpenGames {
+    display: none;
+}
+
+#waitForYourTurn {
+    display: none;
+}
+
+#playYourTurn {
+    display: none;
+}
+
+#returnToLobby {
+    display: none;
+}
+
+#bid, #challenge {
+    margin-top: 25px;
+}
+
+/*
+ *http://blog.themeforest.net/tutorials/vertical-centering-with-css/
+ */

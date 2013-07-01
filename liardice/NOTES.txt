@@ -1,0 +1,3 @@
+Using interpretations like .get_unjoined_player_count() is kind of awkward.
+Would be nice to just filter on unjoined player count, instead of list comp.
+
